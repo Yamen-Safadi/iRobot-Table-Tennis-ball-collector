@@ -1,1 +1,0 @@
-A robot that collects table tennis balls autonomously. iRobot-based machine with added camera and a mechanical arm to view and analyse the surrounding space detect where the ball is and collect all the balls on the ground
