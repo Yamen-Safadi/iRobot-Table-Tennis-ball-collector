@@ -16,12 +16,14 @@ import argparse
 import time
 import cv2  # opencv - display the video stream
 import depthai  # depthai - access the camera and its data packets
+import art
+import keyboard
 
-
-
+#connect to the robot via Create3 SDK kit
 robot = Create3(Bluetooth())
 
 
+#create a pipeline to connect to the camera.
 pipeline = depthai.Pipeline()
 
 cam_rgb = pipeline.create(depthai.node.ColorCamera)
@@ -72,13 +74,35 @@ time.sleep(1.0)
 print("slept")
 
 
+robot_x = 0
+robot_y = 0
 
-x = 0
-y = 0
-size = 0
 
+STANDBY_X = 50
+STANDBY_Y = 0
+
+# x and y will be the coordinates of the ball located in the camera view 
+ball_x = 0
+ball_y = 0
+
+# radius is the radius of the ball detected
+radius = 0
+MIN_RADUIS = 10
+
+# Ball_detected if a flag if there is a ball detected or not.
 ball_detected = False
 
+ball_in_place = False
+
+
+# state will save at witch state the robot is.
+# the values that state can get are the following strings:
+# 0-> InitialSetup  -  here the robot must be set up it is expected that the robot before activating must be on the docking station at the right position
+# 1-> StandBy  -  here the robot should stand in stand by mode and must not intefeir in the game being played.
+# 2-> ApproachingBall  -  a ball has been detected and now the robot must position himeself in a way that allows him to pick the ball up.
+# 3-> CollectingBall  -  the ball is located in the desired location relative to the robot so now the "collecting" process must start
+# 4-> Done  -  here the robot has finished and is expected to go to the docking station and dock.    
+stete = None
 
 
 def task1():
@@ -87,36 +111,55 @@ def task1():
     async def music(robot):
         # This function will not be called again, since it never finishes.
         # Only task that are not currenctly running can be triggered.
-        print('music!')
         
         while True:
             # No need of calling "await hand_over()" in this infinite loop, because robot methods are all called with await.
-            global x
-            global y
+            global ball_x
+            global ball_y
             global ball_detected
-            print("robot sees ball at: " +str(x) +" , " +str(y) + " ball detection " + str (ball_detected))
-            
-            if ball_detected:
-                if x < 200:
+            global state
+            global robot_x, robot_y
+
+            #print("robot sees ball at: " +str(ball_x) +" , " +str(ball_y) + " ball detection " + str (ball_detected))
+            pos = await robot.get_position()
+
+            robot_x = pos.x
+            robot_y = pos.y
+            if state == 'idle':
+                await robot.wait(0.2)
+
+            if state == 'InitialSetup':
+                print(art.text2art('LET\'S GO!'))
+                await robot.undock()
+                await robot.turn_left(180)
+                await robot.wait(2) 
+
+            elif stete == 'StandBy':
+                await robot.navigate_to(STANDBY_X, STANDBY_Y)
+                await robot.wait(0.3) 
+
+            elif stete == 'ApproachingBall':
+                if ball_x < 200:
                     await robot.turn_left(10)
                     await robot.wait(0.3)
-                    
-                elif x > 250:
-                    await robot.turn_left(-10)
+
+                elif ball_x > 250:
+                    await robot.turn_right(10)
                     await robot.wait(0.3)
 
-                if y <  200:
-                    await robot.move(5) 
+                if ball_y < 200:
+                    await robot.move(5)
+
                 
+            elif stete == 'CollectingBall':
+                pass
+            
+            # stete == 'Done'
             else:
-                await robot.wait(0.3)
+                print(art.text2art('Done!  Now Docking '))
+                await robot.dock()
+                await robot.stop()
 
-            key = cv2.waitKey(1)
-            # if the 'q' key is pressed, stop the loop
-            if key == ord("q"):
-                break
-
-        await robot.stop()
     robot.play()
 
 
@@ -124,8 +167,8 @@ def task1():
 def Ball_Tracking():
 
     while True:
-        global x
-        global y
+        global ball_x
+        global ball_y
         global radius
         global ball_detected
 	  
@@ -163,7 +206,7 @@ def Ball_Tracking():
             # it to compute the minimum enclosing circle and
             # centroid
             c = max(cnts, key=cv2.contourArea)
-            ((x, y), radius) = cv2.minEnclosingCircle(c)
+            ((ball_x, ball_y), radius) = cv2.minEnclosingCircle(c)
             M = cv2.moments(c)
             ball_detected = True
 
@@ -209,6 +252,33 @@ def Ball_Tracking():
     cv2.destroyAllWindows()
 
 
+def mainThread():
+    global state, ball_detected, ball_in_place, ball_x, ball_y, radius, MIN_RADUIS, MIN_X, MAX_X, MIN_Y, MAX_Y
+    
+    state = 'idle'
+    
+    while True:
+        if keyboard.read_key() == "i":
+            state = 'InitialSetup'
+            time.sleep(3)
+            break
+    
+    while True:
+
+        if  ball_detected:
+            if ball_x > MIN_X and ball_x < MAX_X and ball_y > MIN_Y and ball_y < MAX_Y and radius > MIN_RADUIS:
+                ball_in_place = True
+                state = 'CollectingBall'
+            else:
+                state = 'ApproachingBall'
+        else:
+            state = 'StandBy'
+
+        # if the 'q' key is pressed, stop the loop
+        if keyboard.read_key() == "d":
+            state = 'Done'
+        
+
 if __name__ == "__main__":
 
 	# print ID of current process
@@ -221,8 +291,10 @@ if __name__ == "__main__":
 	# creating threads
     t1 = threading.Thread(target=task1, name='t1')
     t2 = threading.Thread(target=Ball_Tracking, name='t2')
+    t3 = threading.Thread(target=mainThread,name='mainThread')
 
 	# starting threads
+    t3.start()
     t2.start()
     time.sleep(1)
     t1.start()
