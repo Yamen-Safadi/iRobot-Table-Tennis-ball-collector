@@ -88,7 +88,7 @@ robot_y = 0
 
 
 STANDBY_X = 0
-STANDBY_Y = 0
+STANDBY_Y = -100
 
 # x and y will be the coordinates of the ball located in the camera view 
 ball_x = 0
@@ -152,9 +152,7 @@ def Robot_Control():
             robot_y = pos.y
 
             #if state == 'idle':
-            #await robot.wait(1)
-
-           
+            #await robot.wait(1)          
 
 
             #elif stete == 'StandBy':
