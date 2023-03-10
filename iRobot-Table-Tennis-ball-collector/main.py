@@ -17,22 +17,24 @@ import imutils
 from imutils.video import VideoStream
 import numpy as np
 import argparse
-import time
+from time import sleep
 import cv2  # opencv - display the video stream
 import depthai  # depthai - access the camera and its data packets
 import art
 import keyboard
-
-
-import serial
-
+from adafruit_servokit import ServoKit
+from adafruit_pca9685 import PCA9685
+from adafruit_motor import servo
+import board
+import busio
 #ser = serial.Serial('COM1', baudrate=9600, timeout=1)
 
 #connect to the robot via Create3 SDK kit
 robot = Create3(Bluetooth())
-#robot = Create3(Serial(None))
 
+#backend = Serial('/dev/ttyACM0')                  # Linux
 
+#robot = Create3 (Serial('/dev/ttyS0'))
 
 #create a pipeline to connect to the camera.
 pipeline = depthai.Pipeline()
@@ -87,8 +89,8 @@ robot_x = 0
 robot_y = 0
 
 
-STANDBY_X = 0
-STANDBY_Y = -100
+STANDBY_X = -10
+STANDBY_Y = -10
 
 # x and y will be the coordinates of the ball located in the camera view 
 ball_x = 0
@@ -114,6 +116,19 @@ MIN_RADUIS, MIN_X, MAX_X, MIN_Y, MAX_Y = 10, 200, 400, 400, 550
 # 4-> Done  -  here the robot has finished and is expected to go to the docking station and dock.    
 stete = None
 
+#conection with the Servo motors
+i2c = busio.I2C(board.SCL, board.SDA)
+pca = PCA9685(i2c)
+pca.frequency = 50
+
+servo_motor1 = servo.Servo(pca.channels[0])
+servo_motor2 = servo.Servo(pca.channels[1])
+servo_motor3 = servo.Servo(pca.channels[2])
+servo_motor1.angle = 90
+servo_motor2.angle = 0
+servo_motor3.angle = 0
+
+
 
 def Robot_Control():
 
@@ -136,6 +151,7 @@ def Robot_Control():
             global state
             global robot_x, robot_y
             global radius, MIN_RADUIS, MIN_X, MAX_X, MIN_Y, MAX_Y
+            global servo_motor1, servo_motor2, servo_motor3
             ball_in_place = False
 
             if  ball_detected:
@@ -150,16 +166,14 @@ def Robot_Control():
 
             robot_x = pos.x
             robot_y = pos.y
-
-            #if state == 'idle':
-            #await robot.wait(1)          
+        
 
 
             #elif stete == 'StandBy':
             if not ball_detected:
                 print(art.text2art('Stand By in the corner! '))
                 await robot.navigate_to(STANDBY_X, STANDBY_Y)
-                await robot.wait(1) 
+                await robot.wait(0.3) 
 
 
 
@@ -185,7 +199,20 @@ def Robot_Control():
 
 
             if ball_detected and ball_in_place:
-                print("Collect!")    
+                print("Collect!")   
+                
+                for angle in range(90,50,-5):
+                    servo_motor1.angle = angle
+                    sleep(0.1)           
+                
+                
+                for angle in range(50,90,5):
+                    servo_motor1.angle = angle
+                    sleep(0.1)
+                
+                
+                            
+
             #elif stete == 'CollectingBall':
         
             
